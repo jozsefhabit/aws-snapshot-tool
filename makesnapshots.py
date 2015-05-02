@@ -84,7 +84,11 @@ logging.info(start_message)
 aws_access_key = config['aws_access_key']
 aws_secret_key = config['aws_secret_key']
 ec2_region_name = config['ec2_region_name']
-ec2_region_endpoint = config['ec2_region_endpoint']
+ec2_region_endpoint = 'ec2.' + config['ec2_region_name'] + '.amazonaws.com'
+if config.get('sns_region_name'): 
+    sns_region_name = config.get('sns_region_name')
+else:
+    sns_region_name = ec2_region_name
 sns_arn = config.get('arn')
 proxyHost = config.get('proxyHost')
 proxyPort = config.get('proxyPort')
@@ -122,16 +126,16 @@ if sns_arn:
         # proxy:
         # using roles:
         if aws_access_key:
-            sns = boto.sns.connect_to_region(ec2_region_name, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key, proxy=proxyHost, proxy_port=proxyPort)
+            sns = boto.sns.connect_to_region(sns_region_name, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key, proxy=proxyHost, proxy_port=proxyPort)
         else:
-            sns = boto.sns.connect_to_region(ec2_region_name, proxy=proxyHost, proxy_port=proxyPort)
+            sns = boto.sns.connect_to_region(sns_region_name, proxy=proxyHost, proxy_port=proxyPort)
     else:
         # non proxy:
         # using roles
         if aws_access_key:
-            sns = boto.sns.connect_to_region(ec2_region_name, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
+            sns = boto.sns.connect_to_region(sns_region_name, aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key)
         else:
-            sns = boto.sns.connect_to_region(ec2_region_name)
+            sns = boto.sns.connect_to_region(sns_region_name)
 
 def get_resource_tags(resource_id):
     resource_tags = {}
