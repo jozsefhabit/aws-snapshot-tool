@@ -32,6 +32,8 @@ from config import config
 def helpmsg():
     print('Please use the parameter day, week or month')
 
+def errmsg():
+    return "Unexpected error:" + str(sys.exc_info()[0])
 
 if (len(sys.argv) < 2):
     helpmsg()
@@ -185,7 +187,7 @@ if vols:
                 logging.info(suc_message)
                 total_creates += 1
             except Exception, e:
-                print "Unexpected error:", sys.exc_info()[0]
+                errmsg()
                 logging.error(e)
                 pass
 
@@ -228,9 +230,9 @@ if vols:
                 total_deletes += 1
             time.sleep(3)
         except:
-            print "Unexpected error:", sys.exc_info()[0]
+            errmsg()
             logging.error('Error in processing volume with id: ' + vol.id)
-            errmsg += 'Error in processing volume with id: ' + vol.id
+            errmsg = str(errmsg) + 'Error in processing volume with id: ' + vol.id
             count_errors += 1
         else:
             count_success += 1
@@ -252,7 +254,7 @@ print result
 # SNS reporting
 if sns_arn:
     if errmsg:
-        sns.publish(sns_arn, 'Error in processing volumes: ' + errmsg, 'Error with AWS Snapshot')
+        sns.publish(sns_arn, 'Error in processing volumes: ' + str(errmsg), 'Error with AWS Snapshot')
     sns.publish(sns_arn, message, 'Finished AWS snapshotting')
 
 logging.info(result)
