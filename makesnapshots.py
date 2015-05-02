@@ -29,9 +29,12 @@ import sys
 import logging
 from config import config
 
+def helpmsg():
+    print('Please use the parameter day, week or month')
+
 
 if (len(sys.argv) < 2):
-    print('Please add a positional argument: day, week or month.')
+    helpmsg()
     quit()
 else:
     if sys.argv[1] == 'day':
@@ -43,8 +46,10 @@ else:
     elif sys.argv[1] == 'month':
         period = 'month'
         date_suffix = datetime.today().strftime('%b')
+    elif sys.argv[1] == 'image':
+        createimage = 1
     else:
-        print('Please use the parameter day, week or month')
+        helpmsg()
         quit()
 
 # Message to return result via SNS
@@ -61,10 +66,17 @@ deletelist = []
 
 # Setup logging
 logging.basicConfig(filename=config['log_file'], level=logging.INFO)
-start_message = 'Started taking %(period)s snapshots at %(date)s' % {
-    'period': period,
-    'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
-}
+if createimage:
+    start_message = 'Started taking images at %(date)s' % {
+        'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
+    }
+else:
+    start_message = 'Started taking %(period)s snapshots at %(date)s' % {
+        'period': period,
+        'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
+    }
+
+
 message += start_message + "\n\n"
 logging.info(start_message)
 
@@ -141,78 +153,83 @@ def set_resource_tags(resource, tags):
             }
             resource.add_tag(tag_key, tag_value)
 
-# Get all the volumes that match the tag criteria
-print 'Finding volumes that match the requested tag ({ "tag:%(tag_name)s": "%(tag_value)s" })' % config
-vols = conn.get_all_volumes(filters={ 'tag:' + config['tag_name']: config['tag_value'] })
+# Get all the volumes or images that match the tag criteria
+if createimage:
+    print('Finding instaces that match the requested tag')
+    vols = None
+else:
+    print 'Finding volumes that match the requested tag ({ "tag:%(tag_name)s": "%(tag_value)s" })' % config
+    vols = conn.get_all_volumes(filters={ 'tag:' + config['tag_name']: config['tag_value'] })
 
-for vol in vols:
-    try:
-        count_total += 1
-        logging.info(vol)
-        tags_volume = get_resource_tags(vol.id)
-        description = '%(period)s_snapshot %(vol_id)s_%(period)s_%(date_suffix)s by snapshot script at %(date)s' % {
-            'period': period,
-            'vol_id': vol.id,
-            'date_suffix': date_suffix,
-            'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
-        }
+if vols:
+    for vol in vols:
         try:
-            current_snap = vol.create_snapshot(description)
-            set_resource_tags(current_snap, tags_volume)
-            suc_message = 'Snapshot created with description: %s and tags: %s' % (description, str(tags_volume))
-            print '     ' + suc_message
-            logging.info(suc_message)
-            total_creates += 1
-        except Exception, e:
+            count_total += 1
+            logging.info(vol)
+            tags_volume = get_resource_tags(vol.id)
+            description = '%(period)s_snapshot %(vol_id)s_%(period)s_%(date_suffix)s by snapshot script at %(date)s' % {
+                'period': period,
+                'vol_id': vol.id,
+                'date_suffix': date_suffix,
+                'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
+            }
+            try:
+                current_snap = vol.create_snapshot(description)
+                set_resource_tags(current_snap, tags_volume)
+                suc_message = 'Snapshot created with description: %s and tags: %s' % (description, str(tags_volume))
+                print '     ' + suc_message
+                logging.info(suc_message)
+                total_creates += 1
+            except Exception, e:
+                print "Unexpected error:", sys.exc_info()[0]
+                logging.error(e)
+                pass
+
+            snapshots = vol.snapshots()
+            deletelist = []
+            for snap in snapshots:
+                sndesc = snap.description
+                if (sndesc.startswith('week_snapshot') and period == 'week'):
+                    deletelist.append(snap)
+                elif (sndesc.startswith('day_snapshot') and period == 'day'):
+                    deletelist.append(snap)
+                elif (sndesc.startswith('month_snapshot') and period == 'month'):
+                    deletelist.append(snap)
+                else:
+                    logging.info('     Skipping, not added to deletelist: ' + sndesc)
+
+            for snap in deletelist:
+                logging.info(snap)
+                logging.info(snap.start_time)
+
+            def date_compare(snap1, snap2):
+                if snap1.start_time < snap2.start_time:
+                    return -1
+                elif snap1.start_time == snap2.start_time:
+                    return 0
+                return 1
+
+            deletelist.sort(date_compare)
+            if period == 'day':
+                keep = keep_day
+            elif period == 'week':
+                keep = keep_week
+            elif period == 'month':
+                keep = keep_month
+            delta = len(deletelist) - keep
+            for i in range(delta):
+                del_message = '     Deleting snapshot ' + deletelist[i].description
+                logging.info(del_message)
+                deletelist[i].delete()
+                total_deletes += 1
+            time.sleep(3)
+        except:
             print "Unexpected error:", sys.exc_info()[0]
-            logging.error(e)
-            pass
-
-        snapshots = vol.snapshots()
-        deletelist = []
-        for snap in snapshots:
-            sndesc = snap.description
-            if (sndesc.startswith('week_snapshot') and period == 'week'):
-                deletelist.append(snap)
-            elif (sndesc.startswith('day_snapshot') and period == 'day'):
-                deletelist.append(snap)
-            elif (sndesc.startswith('month_snapshot') and period == 'month'):
-                deletelist.append(snap)
-            else:
-                logging.info('     Skipping, not added to deletelist: ' + sndesc)
-
-        for snap in deletelist:
-            logging.info(snap)
-            logging.info(snap.start_time)
-
-        def date_compare(snap1, snap2):
-            if snap1.start_time < snap2.start_time:
-                return -1
-            elif snap1.start_time == snap2.start_time:
-                return 0
-            return 1
-
-        deletelist.sort(date_compare)
-        if period == 'day':
-            keep = keep_day
-        elif period == 'week':
-            keep = keep_week
-        elif period == 'month':
-            keep = keep_month
-        delta = len(deletelist) - keep
-        for i in range(delta):
-            del_message = '     Deleting snapshot ' + deletelist[i].description
-            logging.info(del_message)
-            deletelist[i].delete()
-            total_deletes += 1
-        time.sleep(3)
-    except:
-        print "Unexpected error:", sys.exc_info()[0]
-        logging.error('Error in processing volume with id: ' + vol.id)
-        errmsg += 'Error in processing volume with id: ' + vol.id
-        count_errors += 1
-    else:
-        count_success += 1
+            logging.error('Error in processing volume with id: ' + vol.id)
+            errmsg += 'Error in processing volume with id: ' + vol.id
+            count_errors += 1
+        else:
+            count_success += 1
 
 result = '\nFinished making snapshots at %(date)s with %(count_success)s snapshots of %(count_total)s possible.\n\n' % {
     'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S'),
