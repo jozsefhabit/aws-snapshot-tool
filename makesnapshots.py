@@ -168,9 +168,35 @@ def set_resource_tags(resource, tags):
 if createimage:
     print('Finding instaces that match the requested tag')
     vols = None
+    insts = conn.get_only_instances(filters={ 'tag:' + config['tag_name']: config['tag_value'] })
 else:
     print 'Finding volumes that match the requested tag ({ "tag:%(tag_name)s": "%(tag_value)s" })' % config
     vols = conn.get_all_volumes(filters={ 'tag:' + config['tag_name']: config['tag_value'] })
+
+if insts:
+    for inst in insts:
+        try:
+            print(inst)
+            count_total += 1
+            logging.info(inst)
+            tags_inst = get_resource_tags(inst.id)
+            tags_name = get_resource_tags(inst.Name)
+            description = 'Create image %(inst_id)s by backup script at %(date)s' % {
+                'inst_id': inst.id,
+                'date': datetime.today().strftime('%d-%m-%Y %H:%M:%S')
+            }
+            instname = 'backup_' + inst.id
+            #print(description)
+            print(tags_inst)
+            print(tags_name)
+            #print(instname)
+            quit()
+            try:
+                current_image = inst.create_image(instname,description,no_reboot=True)
+            except:
+                errmsg()
+        except:
+            errmsg()
 
 if vols:
     for vol in vols:
