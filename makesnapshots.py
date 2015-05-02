@@ -29,6 +29,18 @@ import sys
 import logging
 from config import config
 
+# Createimage
+createimage = None
+
+# Message to return result via SNS
+message = ""
+errmsg = ""
+
+# Counters
+total_creates = 0
+total_deletes = 0
+count_errors = 0
+
 def helpmsg():
     print('Please use the parameter day, week or month')
 
@@ -54,14 +66,7 @@ else:
         helpmsg()
         quit()
 
-# Message to return result via SNS
-message = ""
-errmsg = ""
 
-# Counters
-total_creates = 0
-total_deletes = 0
-count_errors = 0
 
 # List with snapshots to delete
 deletelist = []
