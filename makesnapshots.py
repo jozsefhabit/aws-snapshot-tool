@@ -29,8 +29,10 @@ import sys
 import logging
 from config import config
 
-# Createimage
+# Var inits
 createimage = None
+insts = None
+vols = None
 
 # Message to return result via SNS
 message = ""
@@ -167,7 +169,6 @@ def set_resource_tags(resource, tags):
 # Get all the volumes or images that match the tag criteria
 if createimage:
     print('Finding instaces that match the requested tag')
-    vols = None
     insts = conn.get_only_instances(filters={ 'tag:' + config['tag_name']: config['tag_value'] })
 else:
     print 'Finding volumes that match the requested tag ({ "tag:%(tag_name)s": "%(tag_value)s" })' % config
